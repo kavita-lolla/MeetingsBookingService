@@ -4,6 +4,7 @@ import {
   RecurrenceFrequency,
   ExceptionType,
   TimeSlot,
+  Meeting,
 } from '../models/Meeting';
 import { startOfDay, endOfDay, addDays, isWithinInterval } from 'date-fns';
 
@@ -24,7 +25,6 @@ export class RecurrenceService {
       [RecurrenceFrequency.DAILY]: RRule.DAILY,
       [RecurrenceFrequency.WEEKLY]: RRule.WEEKLY,
       [RecurrenceFrequency.MONTHLY]: RRule.MONTHLY,
-      [RecurrenceFrequency.YEARLY]: RRule.YEARLY,
     };
     return frequencyMap[frequency];
   }
@@ -33,7 +33,7 @@ export class RecurrenceService {
     meeting: MeetingWithRecurrence,
     rangeStart: Date,
     rangeEnd: Date
-  ): TimeSlot[] {
+  ): Meeting[] {
     if (!meeting.recurrenceRule) {
       // Non-recurring meeting
       if (
@@ -43,6 +43,8 @@ export class RecurrenceService {
       ) {
         return [
           {
+            id: meeting.id,
+            resourceId: meeting.resourceId,
             startTime: meeting.startTime,
             endTime: meeting.endTime,
           },
@@ -52,15 +54,16 @@ export class RecurrenceService {
     }
 
     const { recurrenceRule } = meeting;
-    const occurrences: TimeSlot[] = [];
+    const occurrences: Meeting[] = [];
 
     // Create RRule
     const rule = new RRule({
       freq: this.mapFrequency(recurrenceRule.frequency),
       interval: recurrenceRule.interval,
       dtstart: meeting.startTime,
-      until: recurrenceRule.until,
-      byweekday: recurrenceRule.byDay.length > 0 ? recurrenceRule.byDay : undefined,
+      until: recurrenceRule.until ?? addDays( new Date(), 30 ),
+      byweekday: recurrenceRule.byDay.length > 0 && recurrenceRule.frequency === RecurrenceFrequency.WEEKLY? recurrenceRule.byDay : undefined,
+      bymonthday: recurrenceRule.byDay.length > 0 && recurrenceRule.frequency === RecurrenceFrequency.MONTHLY ? recurrenceRule.byDay : undefined
     });
 
     // Get all occurrences in the range
@@ -70,17 +73,11 @@ export class RecurrenceService {
     const duration = meeting.endTime.getTime() - meeting.startTime.getTime();
 
     // Process exceptions
-    const skipDates = new Set<string>();
-    const cancelDates = new Set<string>();
+    const excludeDates = new Set<string>();
 
     if (meeting.exceptions) {
       for (const exception of meeting.exceptions) {
-        const dateStr = exception.exceptionDate.toISOString();
-        if (exception.exceptionType === ExceptionType.SKIP) {
-          skipDates.add(dateStr);
-        } else if (exception.exceptionType === ExceptionType.CANCEL) {
-          cancelDates.add(dateStr);
-        }
+        excludeDates.add(exception.exceptionDate.toISOString());
       }
     }
 
@@ -88,13 +85,15 @@ export class RecurrenceService {
       const instanceStr = instance.toISOString();
 
       // Skip if this instance is in the skip or cancel list
-      if (skipDates.has(instanceStr) || cancelDates.has(instanceStr)) {
+      if (excludeDates.has(instanceStr)) {
         continue;
       }
 
       const endTime = new Date(instance.getTime() + duration);
 
       occurrences.push({
+        id: meeting.id,
+        resourceId: meeting.resourceId,
         startTime: instance,
         endTime: endTime,
       });

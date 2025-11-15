@@ -25,8 +25,8 @@ describe('Booking API E2E Tests', () => {
 
       expect(response.body).toHaveProperty('id');
       expect(response.body.resource_id).toBe(payload.resource_id);
-      expect(response.body.start_time).toBe(payload.start_time);
-      expect(response.body.end_time).toBe(payload.end_time);
+      expect(new Date(response.body.start_time).toISOString()).toBe(new Date(payload.start_time).toISOString());
+      expect(new Date(response.body.end_time).toISOString()).toBe(new Date(payload.end_time).toISOString());
     });
 
     it('should create a recurring booking successfully', async () => {
@@ -261,7 +261,7 @@ describe('Booking API E2E Tests', () => {
       expect(response.body).toHaveProperty('id');
       expect(response.body.recurrence_rule).toBeDefined();
       expect(response.body.recurrence_rule.frequency).toBe('WEEKLY');
-      expect(response.body.recurrence_rule.until).toBeNull();
+      expect(response.body.recurrence_rule.until).toBeUndefined();
     });
 
     it('should create infinitely recurring monthly meeting', async () => {
@@ -287,7 +287,7 @@ describe('Booking API E2E Tests', () => {
       expect(response.body).toHaveProperty('id');
       expect(response.body.recurrence_rule).toBeDefined();
       expect(response.body.recurrence_rule.frequency).toBe('MONTHLY');
-      expect(response.body.recurrence_rule.until).toBeNull();
+      expect(response.body.recurrence_rule.until).toBeUndefined();
     });
 
     it('should create infinitely recurring daily meeting', async () => {
@@ -313,7 +313,7 @@ describe('Booking API E2E Tests', () => {
       expect(response.body).toHaveProperty('id');
       expect(response.body.recurrence_rule).toBeDefined();
       expect(response.body.recurrence_rule.frequency).toBe('DAILY');
-      expect(response.body.recurrence_rule.until).toBeNull();
+      expect(response.body.recurrence_rule.until).toBeUndefined();
     });
   });
 

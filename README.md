@@ -676,7 +676,7 @@ IDEMPOTENCY_KEY_TTL_HOURS=24
 ### recurrence_rules
 - `id` (UUID, PK)
 - `meeting_id` (UUID, FK)
-- `frequency` (VARCHAR: DAILY, WEEKLY, MONTHLY, YEARLY)
+- `frequency` (VARCHAR: DAILY, WEEKLY, MONTHLY)
 - `interval` (INTEGER)
 - `by_day` (INTEGER[]: 0-6 for days of week - 0 for monday)
 - `until_date` (TIMESTAMPTZ)

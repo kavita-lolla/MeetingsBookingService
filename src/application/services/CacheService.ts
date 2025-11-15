@@ -1,7 +1,7 @@
 import { RedisClient } from '../../infrastructure/cache/RedisClient';
 import { MeetingRepository } from '../../infrastructure/repositories/MeetingRepository';
 import { RecurrenceService } from '../../domain/services/RecurrenceService';
-import { MeetingWithRecurrence, TimeSlot } from '../../domain/models/Meeting';
+import { Meeting, MeetingWithRecurrence, TimeSlot } from '../../domain/models/Meeting';
 import { logger } from '../../infrastructure/logging/Logger';
 import { config } from '../../config';
 import { addDays, startOfDay, endOfDay, format } from 'date-fns';
@@ -118,10 +118,12 @@ export class CacheService {
 
         // Get existing meetings for this day
         const existing = await this.redisClient.get(cacheKey);
-        const slots: TimeSlot[] = existing ? JSON.parse(existing) : [];
+        const slots: Meeting[] = existing ? JSON.parse(existing) : [];
 
         // Add new meeting
         slots.push({
+          id: occurrence.id,
+          resourceId: occurrence.resourceId,
           startTime: occurrence.startTime,
           endTime: occurrence.endTime,
         });
@@ -150,18 +152,20 @@ export class CacheService {
   public async getMeetingsForDay(
     resourceId: string,
     date: Date
-  ): Promise<TimeSlot[]> {
+  ): Promise<Meeting[]> {
     try {
       const day = startOfDay(date);
       const cacheKey = this.getCacheKey(resourceId, day);
 
       const cached = await this.redisClient.get(cacheKey);
       if (cached) {
-        const slots: TimeSlot[] = JSON.parse(cached);
+        const slots: Meeting[] = JSON.parse(cached);
         // Parse dates back from JSON
         return slots.map((slot) => ({
           startTime: new Date(slot.startTime),
           endTime: new Date(slot.endTime),
+          id: slot.id,
+          resourceId: slot.resourceId
         }));
       }
 
@@ -176,9 +180,9 @@ export class CacheService {
     resourceId: string,
     startDate: Date,
     endDate: Date
-  ): Promise<TimeSlot[]> {
+  ): Promise<Meeting[]> {
     try {
-      const allSlots: TimeSlot[] = [];
+      const allSlots: Meeting[] = [];
       let currentDay = startOfDay(startDate);
       const end = startOfDay(endDate);
 

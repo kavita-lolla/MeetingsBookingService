@@ -11,9 +11,13 @@ import {
   ExceptionType,
   ConflictingMeeting,
   TimeSlot,
+  Meeting,
 } from '../../domain/models/Meeting';
 import { logger } from '../../infrastructure/logging/Logger';
 import { addMinutes } from 'date-fns';
+import { AvailabilityService } from './AvailabilityService';
+
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface BookingConflict {
   conflictingMeetings: ConflictingMeeting[];
@@ -28,6 +32,7 @@ export class BookingService {
   private kafkaProducer: KafkaProducer;
   private recurrenceService: RecurrenceService;
   private cacheService: CacheService;
+  private availabilityService: AvailabilityService;
 
   private constructor() {
     this.db = DatabaseClient.getInstance();
@@ -36,6 +41,7 @@ export class BookingService {
     this.kafkaProducer = KafkaProducer.getInstance();
     this.recurrenceService = RecurrenceService.getInstance();
     this.cacheService = CacheService.getInstance();
+    this.availabilityService = AvailabilityService.getInstance();
   }
 
   public static getInstance(): BookingService {
@@ -52,11 +58,9 @@ export class BookingService {
     recurrenceRule?: RecurrenceRule,
     exceptions?: RecurrenceException[]
   ): Promise<MeetingWithRecurrence | BookingConflict> {
-    // Use distributed lock to prevent double booking
-    return await this.lockManager.withLock(resourceId, async () => {
-      return await this.db.transaction(async (client) => {
+    
         // Check for conflicts
-        const conflicts = await this.detectConflicts(
+    const conflicts = await this.detectConflicts(
           resourceId,
           startTime,
           endTime,
@@ -64,7 +68,7 @@ export class BookingService {
           exceptions
         );
 
-        if (conflicts.conflictingMeetings.length > 0) {
+    if (conflicts.conflictingMeetings.length > 0) {
           logger.info('Booking conflict detected', {
             resourceId,
             conflicts: conflicts.conflictingMeetings.length,
@@ -72,6 +76,9 @@ export class BookingService {
           return conflicts;
         }
 
+        // Use distributed lock to prevent double booking
+    return await this.lockManager.withLock(resourceId, async () => {
+      return await this.db.transaction(async (client) => {
         // No conflicts, create the meeting
         const meeting = await this.meetingRepository.createMeeting(
           { resourceId, startTime, endTime },
@@ -105,35 +112,22 @@ export class BookingService {
     recurrenceRule?: RecurrenceRule,
     exceptions?: RecurrenceException[]
   ): Promise<BookingConflict> {
-    const conflictingMeetings: ConflictingMeeting[] = [];
 
     if (!recurrenceRule) {
-      // Simple single meeting - check database directly
-      const conflicts = await this.meetingRepository.findConflictingMeetings(
-        resourceId,
-        startTime,
-        endTime
-      );
-
-      if (conflicts.length > 0) {
-        return {
-          conflictingMeetings: conflicts.map((m) => ({
-            meetingId: m.id,
-            startTime: m.startTime,
-            endTime: m.endTime,
-          })),
-          nextAvailable: await this.findNextAvailableSlots(
-            resourceId,
-            startTime,
-            endTime
-          ),
-        };
-      }
-
-      return { conflictingMeetings: [], nextAvailable: [] };
+      return await this.detectConflictingMeetings(resourceId, startTime, endTime);
     }
+    else {
+      return await this.detectConflictingRecurringMeetings(resourceId, startTime, endTime, recurrenceRule, exceptions);
+    }
+  }
 
-    // Recurring meeting - expand and check each occurrence
+  private async detectConflictingRecurringMeetings(
+    resourceId: string,
+    startTime: Date,
+    endTime: Date,
+    recurrenceRule: RecurrenceRule,
+    exceptions?: RecurrenceException[]
+  ): Promise<BookingConflict> {
     const proposedMeeting: MeetingWithRecurrence = {
       id: 'temp',
       resourceId,
@@ -143,40 +137,94 @@ export class BookingService {
       exceptions,
     };
 
+    const conflictingMeetings: ConflictingMeeting[] = [];
+    const redisAvailable = await this.cacheService.isRedisAvailable();
+    const now = new Date();
+    const isWithin30Days =startTime.getTime() - now.getTime() <= THIRTY_DAYS_MS &&
+                          endTime.getTime() - now.getTime() <= THIRTY_DAYS_MS;
+    const meetings:Meeting[] = [];
     // Check for next 30 days (or until recurrence ends)
-    const checkUntil = recurrenceRule.until || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const checkUntil = new Date(Math.min((recurrenceRule.until?.getTime() ?? Infinity) || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).getTime()));
+
+    if (redisAvailable && isWithin30Days) {
+      meetings.push(...await this.cacheService.getMeetingsForDateRange(resourceId, startTime, endTime));
+    }
+  else {
+    meetings.push(... await this.availabilityService.getAllMeetingsForResourceByDateRange(resourceId, startTime, checkUntil));
+  }
+
     const occurrences = this.recurrenceService.expandRecurringMeeting(
       proposedMeeting,
       startTime,
       checkUntil
     );
 
+    const availability : TimeSlot[] = [];
     // Check each occurrence for conflicts
     for (const occurrence of occurrences) {
-      const conflicts = await this.meetingRepository.findConflictingMeetings(
-        resourceId,
-        occurrence.startTime,
-        occurrence.endTime
-      );
-
-      if (conflicts.length > 0) {
-        conflictingMeetings.push(
-          ...conflicts.map((m) => ({
-            meetingId: m.id,
-            startTime: m.startTime,
-            endTime: m.endTime,
-          }))
-        );
+      availability.push(... this.findNextAvailableSlots(occurrence.startTime, occurrence.endTime, meetings, 1));
+      for (const meeting of meetings) {
+        if (this.timeOverlaps(meeting.startTime, meeting.endTime, startTime, endTime)) {
+          conflictingMeetings.push({
+            meetingId: meeting.id,
+            startTime: meeting.startTime,
+            endTime: meeting.endTime,
+          });
+        }
       }
     }
 
-    if (conflictingMeetings.length > 0) {
+    const frequencyOfSlots = this.getSlotFrequency(availability, occurrences.length);
+
+    availability.filter(availability => {
+      const key = `${availability.startTime}|${availability.endTime}`;
+      return frequencyOfSlots.get(key) === occurrences.length;
+    });
+
+    return {conflictingMeetings, nextAvailable: availability};
+  }
+
+  private async detectConflictingMeetings(
+    resourceId: string,
+    startTime: Date,
+    endTime: Date
+  ): Promise<BookingConflict> {
+    const conflictingMeetings: ConflictingMeeting[] = [];
+    const redisAvailable = await this.cacheService.isRedisAvailable();
+    const now = new Date();
+    const isWithin30Days =startTime.getTime() - now.getTime() <= THIRTY_DAYS_MS &&
+                          endTime.getTime() - now.getTime() <= THIRTY_DAYS_MS;
+    const conflicts:Meeting[] = [];
+    const meetings:Meeting[] = [];
+
+    if (redisAvailable && isWithin30Days) {
+        meetings.push(...await this.cacheService.getMeetingsForDateRange(resourceId, startTime, endTime));
+      }
+    else {
+      meetings.push(... await this.availabilityService.getAllMeetingsForResourceByDateRange(resourceId, startTime, endTime));
+    }
+    
+    for (const meeting of meetings) {
+      if (this.timeOverlaps(meeting.startTime, meeting.endTime, startTime, endTime)) {
+        conflicts.push(meeting);
+      }
+    }
+
+    if (conflicts.length > 0) {
+      conflictingMeetings.push(
+        ...conflicts.map((m) => ({
+          meetingId: m.id,
+          startTime: m.startTime,
+          endTime: m.endTime,
+        }))
+      )
       return {
         conflictingMeetings,
         nextAvailable: await this.findNextAvailableSlots(
-          resourceId,
           startTime,
-          endTime
+          endTime,
+          meetings,
+          7
         ),
       };
     }
@@ -184,43 +232,72 @@ export class BookingService {
     return { conflictingMeetings: [], nextAvailable: [] };
   }
 
-  private async findNextAvailableSlots(
-    resourceId: string,
+  private getSlotFrequency(allAvailableSlots: TimeSlot[], repeatCount: Number) {
+    const frequency = new Map();
+
+    for (const item of allAvailableSlots) {
+      const key = `${item.startTime}|${item.endTime}`;
+      frequency.set(key, (frequency.get(key) || 0) + 1);
+    }
+
+    return frequency;
+  }
+
+  private timeOverlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
+    return new Date(aStart) < new Date(bEnd) && new Date(aEnd) > new Date(bStart);
+  }
+  
+  private findNextAvailableSlots(
     requestedStart: Date,
     requestedEnd: Date,
+    meetings: Meeting[],
+    checkInDays: number,
     limit: number = 5
-  ): Promise<TimeSlot[]> {
+  ): TimeSlot[] {
+    meetings.sort((a,b) => a.startTime.getTime() - b.startTime.getTime() );
+    
     const duration = requestedEnd.getTime() - requestedStart.getTime();
     const availableSlots: TimeSlot[] = [];
 
     // Search forward from the requested start time
     let currentStart = new Date(requestedStart);
-    const searchLimit = new Date(requestedStart.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const searchLimit = new Date(requestedStart.getTime() + checkInDays * 24 * 60 * 60 * 1000);
 
-    while (availableSlots.length < limit && currentStart < searchLimit) {
-      const currentEnd = new Date(currentStart.getTime() + duration);
-
-      const conflicts = await this.meetingRepository.findConflictingMeetings(
-        resourceId,
-        currentStart,
-        currentEnd
-      );
-
-      if (conflicts.length === 0) {
-        availableSlots.push({
-          startTime: new Date(currentStart),
-          endTime: new Date(currentEnd),
-        });
-        // Move forward by the duration to find the next slot
-        currentStart = new Date(currentEnd.getTime() + 15 * 60 * 1000); // 15 min gap
-      } else {
-        // Move to after the conflicting meeting
-        const latestConflictEnd = Math.max(
-          ...conflicts.map((m) => m.endTime.getTime())
-        );
-        currentStart = new Date(latestConflictEnd + 15 * 60 * 1000); // 15 min gap
+    for (const meeting of meetings) {
+      while (availableSlots.length < limit && currentStart < searchLimit) {
+        if(meeting.endTime > requestedStart&& meeting.startTime < requestedEnd)
+          continue;
+        if (meeting.startTime > currentStart) {
+          availableSlots.push({
+            startTime: new Date(currentStart),
+            endTime: new Date(Math.min(meeting.startTime.getTime(), addMinutes(currentStart, duration).getTime()))
+          });
+        }
+    
+        // Move the current pointer forward if event overlaps or touches it
+        if (meeting.endTime > currentStart) {
+          currentStart = new Date(meeting.endTime);
+        }
       }
     }
+    // while (availableSlots.length < limit && currentStart < searchLimit) {
+    //   const currentEnd = new Date(currentStart.getTime() + duration);
+
+    //   if (conflicts.length === 0) {
+    //     availableSlots.push({
+    //       startTime: new Date(currentStart),
+    //       endTime: new Date(currentEnd),
+    //     });
+    //     // Move forward by the duration to find the next slot
+    //     currentStart = new Date(currentEnd.getTime() + 15 * 60 * 1000); // 15 min gap
+    //   } else {
+    //     // Move to after the conflicting meeting
+    //     const latestConflictEnd = Math.max(
+    //       ...conflicts.map((m) => m.endTime.getTime())
+    //     );
+    //     currentStart = new Date(latestConflictEnd + 15 * 60 * 1000); // 15 min gap
+    //   }
+    // }
 
     return availableSlots;
   }

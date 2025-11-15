@@ -47,9 +47,6 @@ INSERT INTO recurrence_rules (id, meeting_id, frequency, interval, by_day, until
 INSERT INTO meetings (id, resource_id, start_time, end_time, created_at, updated_at) VALUES
   ('test-recurring-5', 'TEST_R008', '2026-03-01 12:00:00+00', '2026-03-01 13:00:00+00', NOW(), NOW());
 
-INSERT INTO recurrence_rules (id, meeting_id, frequency, interval, by_day, until, created_at, updated_at) VALUES
-  ('test-rrule-5', 'test-recurring-5', 'YEARLY', 1, ARRAY[]::integer[], '2030-12-31 23:59:59+00', NOW(), NOW());
-
 -- Insert sample infinite recurring meetings
 INSERT INTO meetings (id, resource_id, start_time, end_time, created_at, updated_at) VALUES
   ('test-infinite-1', 'TEST_R009', '2026-01-05 09:00:00+00', '2026-01-05 10:00:00+00', NOW(), NOW()),

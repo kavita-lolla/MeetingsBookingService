@@ -126,7 +126,7 @@ export class MeetingRepository {
     }
   }
 
-  public async findConflictingMeetings(
+  public async findSingularConflictingMeetings(
     resourceId: string,
     startTime: Date,
     endTime: Date,
@@ -176,7 +176,8 @@ export class MeetingRepository {
          AND (
            (m.start_time >= $2 AND m.start_time < $3)
            OR (m.end_time > $2 AND m.end_time <= $3)
-           OR (m.start_time <= $2 AND m.end_time >= $3)
+           OR (m.start_time <= $2 AND m.end_time <= $3)
+           OR (r.until is NULL OR r.until >$2)
            OR r.id IS NOT NULL
          )
          ORDER BY m.start_time ASC`,

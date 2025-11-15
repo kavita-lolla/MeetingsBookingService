@@ -10,11 +10,30 @@ export const recurrenceExceptionSchema = z.object({
 });
 
 export const recurrenceRuleSchema = z.object({
-  frequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']),
+  frequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']),
   interval: z.number().int().positive().default(1),
   day: z.array(z.number().int().min(0).max(6)).default([]),
-  until: z.string().datetime().optional(),
+  until: z.string().datetime().nullable().optional(),
   exceptions: z.array(recurrenceExceptionSchema).optional(),
+}).refine((val) => {
+  const { frequency, day } = val;
+
+  if (frequency === "DAILY") {
+    return day.length === 0;
+  }
+
+  if (frequency === "WEEKLY") {
+    return day.every((d) => d >= 0 && d <= 6);
+  }
+
+  if (frequency === "MONTHLY") {
+    return day.every((d) => d >= 0 && d <= 30);
+  }
+
+  return true;
+}, {
+  message: "Invalid day[] values for the given frequency",
+  path: ["day"],
 }).optional();
 
 export const createBookingSchema = z.object({

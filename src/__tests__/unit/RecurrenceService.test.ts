@@ -297,68 +297,6 @@ describe('RecurrenceService', () => {
     });
   });
 
-  describe('Yearly Recurring Meetings', () => {
-    it('should expand yearly recurring meeting correctly', () => {
-      const meeting: MeetingWithRecurrence = {
-        id: 'test-yearly-1',
-        resourceId: 'R789',
-        startTime: new Date('2025-03-15T10:00:00Z'),
-        endTime: new Date('2025-03-15T11:00:00Z'),
-        recurrenceRule: {
-          frequency: RecurrenceFrequency.YEARLY,
-          interval: 1,
-          byDay: [],
-          until: new Date('2030-12-31T23:59:59Z'),
-        },
-      };
-
-      const rangeStart = new Date('2025-01-01T00:00:00Z');
-      const rangeEnd = new Date('2030-12-31T23:59:59Z');
-
-      const occurrences = recurrenceService.expandRecurringMeeting(
-        meeting,
-        rangeStart,
-        rangeEnd
-      );
-
-      // Should have 6 yearly occurrences (2025-2030)
-      expect(occurrences.length).toBe(6);
-      
-      // Verify each occurrence is on March 15
-      occurrences.forEach((occurrence) => {
-        expect(occurrence.startTime.getMonth()).toBe(2); // March (0-indexed)
-        expect(occurrence.startTime.getDate()).toBe(15);
-      });
-    });
-
-    it('should handle yearly recurring meeting with interval', () => {
-      const meeting: MeetingWithRecurrence = {
-        id: 'test-yearly-2',
-        resourceId: 'R789',
-        startTime: new Date('2025-06-01T14:00:00Z'),
-        endTime: new Date('2025-06-01T15:00:00Z'),
-        recurrenceRule: {
-          frequency: RecurrenceFrequency.YEARLY,
-          interval: 2, // Every 2 years
-          byDay: [],
-          until: new Date('2035-12-31T23:59:59Z'),
-        },
-      };
-
-      const rangeStart = new Date('2025-01-01T00:00:00Z');
-      const rangeEnd = new Date('2035-12-31T23:59:59Z');
-
-      const occurrences = recurrenceService.expandRecurringMeeting(
-        meeting,
-        rangeStart,
-        rangeEnd
-      );
-
-      // Should have 6 occurrences (2025, 2027, 2029, 2031, 2033, 2035)
-      expect(occurrences.length).toBe(6);
-    });
-  });
-
   describe('Fetching Meetings for Specific Days', () => {
     it('should fetch all meetings for next 30 days on server start', () => {
       const now = new Date();

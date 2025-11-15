@@ -27,20 +27,8 @@ CREATE TABLE recurrence_rules (
     until_date TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT valid_frequency CHECK (frequency IN ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY')),
+    CONSTRAINT valid_frequency CHECK (frequency IN ('DAILY', 'WEEKLY', 'MONTHLY')),
     CONSTRAINT valid_interval CHECK (interval > 0),
-  --   CONSTRAINT valid_by_day CHECK (
-  --       CASE
-  --   WHEN frequency = 'WEEKLY' THEN
-  --     (SELECT bool_and(v BETWEEN 0 AND 6) FROM unnest(by_day) AS v)  -- Sunday to Saturday
-  --   WHEN frequency = 'MONTHLY' THEN
-  --     (SELECT bool_and(v BETWEEN 1 AND 31) FROM unnest(by_day) AS v)
-  --   WHEN frequency = 'YEARLY' THEN
-  --     (SELECT bool_and(v BETWEEN 1 AND 12) FROM unnest(by_day) AS v)
-  --   ELSE
-  --     by_day = '{}'  -- empty for DAILY etc.
-  -- END
-  --   ),
     CONSTRAINT unique_meeting_recurrence UNIQUE (meeting_id)
 );
 
@@ -72,7 +60,7 @@ CREATE TABLE idempotency_keys (
 );
 
 CREATE INDEX idx_idempotency_key ON idempotency_keys(idempotency_key);
-CREATE INDEX idx_idempotency_expires_at ON idempotency_keys(expires_at); -- TODO : Is this needed?
+CREATE INDEX idx_idempotency_expires_at ON idempotency_keys(expires_at); 
 
 
 -- Create function to clean up expired idempotency keys

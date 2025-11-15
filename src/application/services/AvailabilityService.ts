@@ -1,9 +1,12 @@
 import { MeetingRepository } from '../../infrastructure/repositories/MeetingRepository';
 import { RecurrenceService } from '../../domain/services/RecurrenceService';
 import { CacheService } from './CacheService';
-import { TimeSlot } from '../../domain/models/Meeting';
+import { Meeting, TimeSlot } from '../../domain/models/Meeting';
 import { logger } from '../../infrastructure/logging/Logger';
 import { startOfDay, endOfDay, addMinutes, isBefore, isAfter } from 'date-fns';
+import { BookingService } from './BookingService';
+
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface AvailabilityResult {
   availability: TimeSlot[];
@@ -43,7 +46,11 @@ export class AvailabilityService {
       const redisAvailable = await this.cacheService.isRedisAvailable();
       let bookedSlots: TimeSlot[] = [];
 
-      if (redisAvailable) {
+      const now = new Date();
+      const isWithin30Days =startTime.getTime() - now.getTime() <= THIRTY_DAYS_MS &&
+                          endTime.getTime() - now.getTime() <= THIRTY_DAYS_MS;
+
+      if (redisAvailable && isWithin30Days) {
         // Get from cache
         bookedSlots = await this.cacheService.getMeetingsForDateRange(
           resourceId,
@@ -57,7 +64,7 @@ export class AvailabilityService {
       } else {
         // Fallback to database
         logger.warn('Redis unavailable, falling back to database');
-        bookedSlots = await this.getMeetingsFromDatabase(
+        bookedSlots = await this.getAllMeetingsForResourceByDateRange(
           resourceId,
           startTime,
           endTime
@@ -89,18 +96,18 @@ export class AvailabilityService {
     }
   }
 
-  private async getMeetingsFromDatabase(
+  public async getAllMeetingsForResourceByDateRange(
     resourceId: string,
     startTime: Date,
     endTime: Date
-  ): Promise<TimeSlot[]> {
+  ): Promise<Meeting[]> {
     const meetings = await this.meetingRepository.findMeetingsByResourceAndDateRange(
       resourceId,
       startTime,
       endTime
     );
 
-    const allSlots: TimeSlot[] = [];
+    const allSlots: Meeting[] = [];
 
     for (const meeting of meetings) {
       const occurrences = this.recurrenceService.expandRecurringMeeting(

@@ -2,6 +2,8 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
+  globalSetup: "./src/__tests__/globalSetup.js",
+  globalTeardown: "./src/__tests__/globalTeardown.js",
   testMatch: ['**/__tests__/**/*.test.ts', '**/?(*.)+(spec|test).ts'],
   coverageDirectory: 'coverage',
   collectCoverageFrom: [
