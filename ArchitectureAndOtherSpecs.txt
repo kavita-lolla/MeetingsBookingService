@@ -1,0 +1,195 @@
+Meetings Booking Service
+
+High-level architecture -
+When a client sends a create meeting request, it includes an idempotency key.
+This key is stored in the database and expires after 24 hours.
+If the same key is used again with exactly the same request, the service returns the same response as before.
+If the same key is used with a different request, the service returns an error saying the key is already used for another request.
+After the request is validated and no conflicts are found:
+A new meeting is saved in the database (in the meetings, recurrenceRule, and recurrenceExceptions tables).
+A BOOKING_CREATED event is published to Kafka.
+A consumer listens to this event and adds the meeting to Redis cache if the meeting occurs within the next 30 days.
+If the request has conflicts, the service sends back:
+The details of the conflicting meetings, and
+The next available time slots.
+Conflict detection works like this:
+If the meeting is within the next 30 days → check conflicts in Redis.
+If not → check conflicts in all meetings (both single and recurring) occurring within 30 days of the requested start time.
+For recurring meetings → find conflicts by looking at all occurrences within 30 days and return common available time slots.
+When checking availability for a resource:
+If the requested date range is within 30 days → use cached meetings from Redis.
+Otherwise → use all meeting occurrences (single + recurring) from the database for the requested date range.
+Trade-offs -
+SQL v/ Non-SQL -
+SQL gives fast query results with proper indexing
+SQL gives better constraining on data
+
+Storage of pre-computed meetings - DB v/s Redis
+Faster retrieval from caching
+Handling eviction or expiry of meetings daily from caching is simpler and cheaper than DB
+
+
+
+Caching key - Per Resource v/s Per Resource Per day 
+Per resource per day - faster for conflict check / fetching for availability check
+Per resource per day has better eviction / TTL handling
+Per resource per day is more scalable. Works better with large data
+
+Cache Handling -
+When the server starts, it rebuilds the Redis cache by loading all meetings scheduled for the next 30 days.
+For each day and each resource, the server stores a Redis key in the format: {resourceId}_{meetingDate}
+Each key contains a list of all meetings (including expanded recurring occurrences) happening on that specific day for that resource.
+All keys for a given day are set to expire at 11:59 PM of that day.
+A background processor runs daily at 11:30 PM. It calculates all meeting occurrences for the 30th day ahead and adds them to the cache using the same {resourceId}_{meetingDate} key format.
+When a new meeting is created through the POST API, the service writes it to the database, publishes a BOOKING_CREATED event to Kafka, and the consumer updates Redis by adding the meeting occurrence(s) to the correct daily keys — but only if the meeting happens within the next 30 days.
+The system must tolerate Redis data loss.
+ If Redis is restarted or loses memory, the server repopulates the cache on startup.
+ If Redis is unavailable at any time, the system should fall back to querying the database directly.
+
+Avoid double booking -
+Each request received should possess an idempotency key to avoid double booking of the same resource.
+If there is no conflict found for requested meeting window, redis lock is imposed on the resource to avoid double booking.
+
+
+API Contract - 
+
+POST /bookings
+Responsible for booking creation (meeting creation).
+Should first validate the received request.
+Find for any conflicts with singular or recurring meeting occurrence.
+If no conflict is found, return success response else conflict response.
+
+Example payload & structure:
+
+Request - 
+{
+"resource_id": "R123",
+"start_time": "2025-08-10T09:00:00Z",
+"end_time": "2025-08-10T10:00:00Z",
+"recurrence_rule": {
+  "frequency": "WEEKLY",
+  "interval": 1,
+  "day": [2, 5],
+  "until": "2025-10-10T10:00:00Z",
+ "exceptions": {
+    "skip": [
+      "2025-08-15T09:00:00Z",
+      "2025-09-05T09:00:00Z"
+    ],
+    "cancel": [
+      "2025-09-19T09:00:00Z"
+    ]
+  }
+}
+}
+
+Response - 
+Success : 200 OK
+ {
+	“id”:”M123”,
+	"resource_id": "R123",
+"start_time": "2025-08-10T09:00:00Z",
+"end_time": "2025-08-10T10:00:00Z",
+"recurrence_rule": {
+  "frequency": "WEEKLY",
+  "interval": 1,
+  "day": [2, 5],
+  "until": "2025-10-10T10:00:00Z"
+}
+
+}
+
+In case of Conflict : 409 Conflict with current state of resource
+ {
+  "error": "conflict",
+  "message": "The requested time overlaps with another meeting.",
+  "conflicting_meetings": [
+    {
+      "meeting_id": "M456",
+      "start_time": "2025-08-10T09:00:00Z",
+      "end_time": "2025-08-10T10:00:00Z"
+    }
+  ],
+  "next_available": [
+    { "start_time": "2025-08-10T10:00:00Z", "end_time": "2025-08-10T11:00:00Z" },
+    { "start_time": "2025-08-10T14:00:00Z", "end_time": "2025-08-10T15:00:00Z" }
+  ]
+}
+
+
+GET /availability
+Responsible for returning free time slots for a resource within a given time period.
+Validates the presence of required parameters.
+Fetches meetings between the given date range from cache if dates range fall within 30 days else from DB. (Considers singular and recurring meeting occurrences)
+Returns a paginated response.
+
+Request - 
+	/availability/{resource_id}?start_time={}&&end_time={}
+
+Response - 
+{
+	“resource_id”:”R123”,
+	“availability”:[
+{
+	"start_time": "2025-08-10T09:00:00Z",
+"end_time": "2025-08-10T10:00:00Z"
+}...]
+}
+
+Database specifications
+
+RelationalDB - conflicts need to be fetched for each booking creation, better constraining at DB level, better concurrency handling.
+
+Normalised Schemas
+-
+Schema meetings - Holds the primary meeting data. Can add status when incorporating cancellation / rescheduling
+id
+resourceId
+startTime
+endTime
+
+
+Schema recurrenceRules - Holds the recurrence rule for recurring meeting. Linked to meetings table’s id with meetingId.
+id
+meetingId
+frequency
+interval
+byDay   // can add byMonth if extending for quarterly, yearly etc.
+Until
+
+
+Schema recurrenceExceptions - Holds any exception for a recurring meeting to exclude particular occurrence. Linked to id of recurrenceRules table with recurrenceId
+id
+recurrenceId
+Type (SKIP, CANCEL)   // can be extended to reschedule, add more columns for new timings
+startTime
+reason
+
+
+
+Scope of Improvement/Extensions - 
+Excluding days (like weekends, alternate fridays etc)
+Treat skip (not adding) and cancel differently (add but mark as cancelled) - add a status column to meetings table.
+Scheduling based on week day frequency - like 2nd tuesday, last day of month
+Improve availability finding algorithm to give recommendations for recurring meetings based on frequency (Weekly - tues 9am-10am, Monthly - 10th 10am-11am etc), currently returning available time slot for the same day in that frequency.
+Improve code/folder structuring.
+Refactor for better reusability of code.
+Use of caching for available slots within 30 days - enhances performance of both apis.
+Logging can be improved.
+To
+ Person Person Person
+Cc
+ Person
+Bcc
+ Person
+Subject
+
+
+
+
+
+
+
+
+Application was working before a docker update in my local machine. It’s unable to create Date objects properly and hence failing. All the testcases were passed.
+Load test shows 8% error rate on 1000 requests per hour and even larger on spike test. Can work on improving the same.
