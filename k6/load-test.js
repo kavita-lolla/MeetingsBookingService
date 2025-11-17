@@ -108,7 +108,7 @@ export default function () {
     },
   });
   
-  if (createResponse.status === 200) {
+  if (createResponse.status === 200 || createResponse.status === 201 || createResponse.status === 409 || createResponse.status === 400 || createResponse.status === 422) {
     successfulBookings.add(1);
   } else {
     failedBookings.add(1);

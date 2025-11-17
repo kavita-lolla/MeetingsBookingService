@@ -26,6 +26,11 @@ export class IdempotencyMiddleware {
   ): Promise<void> => {
     const idempotencyKey = req.headers['idempotency-key'] as string;
 
+    logger.info('Incoming request in middleware', {
+        method: req.method,
+        path: req.path,
+        body: req.body
+      })
     if (!idempotencyKey) {
       res.status(400).json({
         error: 'bad_request',
@@ -79,8 +84,23 @@ export class IdempotencyMiddleware {
         [idempotencyKey, requestHash, expiresAt]
       );
 
+      logger.info('Incoming request in middleware', {
+        method: req.method,
+        path: req.path,
+        body: req.body.start_time,
+        requestHash: requestHash
+      })
+
       // Store original send function
       const originalSend = res.send.bind(res);
+
+      logger.info('Incoming request in middleware after', {
+        method: req.method,
+        path: req.path,
+        body: req.body.start_time,
+        resource: req.body.resource,
+        requestHash: requestHash
+      })
 
       // Override send to capture response
       res.send = function (body: any): Response {

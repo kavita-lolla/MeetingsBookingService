@@ -581,7 +581,12 @@ docker-compose exec postgres psql -U admin -d meetingbooking -c "SELECT pid, now
 docker-compose exec postgres psql -U admin -d meetingbooking -c "SELECT sum(heap_blks_read) as heap_read, sum(heap_blks_hit) as heap_hit, sum(heap_blks_hit) / (sum(heap_blks_hit) + sum(heap_blks_read)) as ratio FROM pg_statio_user_tables;"
 
 # Index usage
-docker-compose exec postgres psql -U admin -d meetingbooking -c "SELECT schemaname, tablename, indexname, idx_scan, idx_tup_read, idx_tup_fetch FROM pg_stat_user_indexes ORDER BY idx_scan DESC;"
+docker-compose exec postgres psql -U admin -d meetingbooking -c "SELECT n.nspname AS schemaname, c.relname AS tablename, i.relname AS indexname, psui.idx_scan, psui.idx_tup_read, psui.idx_tup_fetch
+FROM pg_stat_user_indexes psui
+JOIN pg_class c ON psui.relid = c.oid
+JOIN pg_class i ON psui.indexrelid = i.oid
+JOIN pg_namespace n ON c.relnamespace = n.oid
+ORDER BY psui.idx_scan DESC;"
 ```
 
 ### Redis Performance Monitoring

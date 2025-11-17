@@ -23,19 +23,19 @@ DELETE FROM recurrence_rules WHERE meeting_id IN (
 );
 
 -- Delete idempotency cache entries for test resources
-DELETE FROM idempotency_cache WHERE key LIKE '%TEST_%' 
-  OR key LIKE '%R123%'
-  OR key LIKE '%R456%'
-  OR key LIKE '%R789%'
-  OR key LIKE '%R999%'
-  OR key LIKE '%R111%'
-  OR key LIKE '%R222%'
-  OR key LIKE '%R333%'
-  OR key LIKE '%R444%'
-  OR key LIKE '%R555%'
-  OR key LIKE '%R666%'
-  OR key LIKE '%R_INFINITE_%'
-  OR key LIKE '%R_CACHE_%';
+DELETE FROM idempotency_keys WHERE idempotency_key LIKE '%TEST_%' 
+  OR idempotency_key LIKE '%R123%'
+  OR idempotency_key LIKE '%R456%'
+  OR idempotency_key LIKE '%R789%'
+  OR idempotency_key LIKE '%R999%'
+  OR idempotency_key LIKE '%R111%'
+  OR idempotency_key LIKE '%R222%'
+  OR idempotency_key LIKE '%R333%'
+  OR idempotency_key LIKE '%R444%'
+  OR idempotency_key LIKE '%R555%'
+  OR idempotency_key LIKE '%R666%'
+  OR idempotency_key LIKE '%R_INFINITE_%'
+  OR idempotency_key LIKE '%R_CACHE_%';
 
 -- Delete all test meetings
 DELETE FROM meetings WHERE resource_id LIKE 'TEST_%' 

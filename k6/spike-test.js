@@ -98,11 +98,13 @@ export default function () {
     'request completed': (r) => r.status !== 0,
     'valid response status': (r) => [200, 400, 409, 500, 503].includes(r.status),
   });
-  
-  if (createResponse.status === 200) {
+
+  if (createResponse.status === 200 || createResponse.status === 201) {
     successfulBookings.add(1);
   } else if (createResponse.status === 409) {
     conflictErrors.add(1);
+    failedBookings.add(1);
+  } else if ([400, 422].includes(createResponse.status)) {
     failedBookings.add(1);
   } else {
     systemErrors.add(1);
@@ -111,7 +113,7 @@ export default function () {
   }
   
   // Minimal sleep during spike
-  sleep(0.1);
+  sleep(0.01);
   
   // Test 2: Query availability (30% of requests to add load)
   if (Math.random() < 0.3) {
@@ -237,10 +239,14 @@ function generateDetailedSummary(data) {
   summary += '│ ERROR ANALYSIS                                              │\n';
   summary += '└─────────────────────────────────────────────────────────────┘\n';
   
-  const successCount = data.metrics.successful_bookings?.values.count || 0;
-  const failCount = data.metrics.failed_bookings?.values.count || 0;
-  const conflictCount = data.metrics.conflict_errors?.values.count || 0;
-  const systemErrorCount = data.metrics.system_errors?.values.count || 0;
+  // const successCount = data.metrics.successful_bookings?.values.count || 0;
+  // const failCount = data.metrics.failed_bookings?.values.count || 0;
+  // const conflictCount = data.metrics.conflict_errors?.values.count || 0;
+  // const systemErrorCount = data.metrics.system_errors?.values.count || 0;
+  const successCount = data.metrics.successful_bookings || 0;
+  const failCount = data.metrics.failed_bookings || 0;
+  const conflictCount = data.metrics.conflict_errors || 0;
+  const systemErrorCount = data.metrics.system_errors || 0;
   const totalBookings = successCount + failCount;
   
   summary += `  Successful Bookings:   ${successCount}\n`;
@@ -259,19 +265,19 @@ function generateDetailedSummary(data) {
   }
   summary += '\n';
   
-  // Database query performance
+  //Database query performance
   if (data.metrics.booking_duration && data.metrics.availability_duration) {
     summary += '┌─────────────────────────────────────────────────────────────┐\n';
     summary += '│ OPERATION-SPECIFIC PERFORMANCE                              │\n';
     summary += '└─────────────────────────────────────────────────────────────┘\n';
     
     summary += `  Booking Creation:\n`;
-    summary += `    Avg: ${data.metrics.booking_duration.values.avg.toFixed(2)}ms\n`;
-    summary += `    P95: ${data.metrics.booking_duration.values['p(95)'].toFixed(2)}ms\n`;
+    summary += `    Avg: ${data.metrics.booking_duration && data.metrics.booking_duration.values && data.metrics.booking_duration.values.avg.toFixed(2)}ms\n`;
+    summary += `    P95: ${data.metrics.booking_duration && data.metrics.booking_duration.values && data.metrics.booking_duration.values['p(95)'].toFixed(2)}ms\n`;
     
     summary += `  Availability Query:\n`;
-    summary += `    Avg: ${data.metrics.availability_duration.values.avg.toFixed(2)}ms\n`;
-    summary += `    P95: ${data.metrics.availability_duration.values['p(95)'].toFixed(2)}ms\n`;
+    summary += `    Avg: ${data.metrics.availability_duration && data.metrics.availability_duration.values && data.metrics.availability_duration.values.avg.toFixed(2)}ms\n`;
+    summary += `    P95: ${data.metrics.availability_duration && data.metrics.availability_duration.values && data.metrics.availability_duration.values['p(95)'].toFixed(2)}ms\n`;
     summary += '\n';
   }
   
@@ -280,8 +286,12 @@ function generateDetailedSummary(data) {
   summary += '│ RECOMMENDATIONS                                             │\n';
   summary += '└─────────────────────────────────────────────────────────────┘\n';
   
-  const p95 = data.metrics.http_req_duration?.values['p(95)'] || 0;
-  const errorRate = data.metrics.error_rate?.values.rate || 0;
+  const p95 = data.metrics.http_req_duration &&
+              data.metrics.http_req_duration.values &&
+              data.metrics.http_req_duration.values["p(95)"]
+                ? data.metrics.http_req_duration.values["p(95)"]
+                : 0;
+  const errorRate = (data.metrics.error_rate && data.metrics.error_rate.values && data.metrics.error_rate.values.rate) || 0;
   
   if (p95 > 5000) {
     summary += '  ⚠ Consider optimizing database queries\n';

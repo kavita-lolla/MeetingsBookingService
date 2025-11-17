@@ -33,6 +33,7 @@ CREATE TABLE recurrence_rules (
 );
 
 CREATE INDEX idx_recurrence_rules_meeting_id ON recurrence_rules(meeting_id);
+CREATE INDEX idx_recurrence_rules_until_date ON recurrence_rules(until_date);
 
 -- Create recurrence_exceptions table
 CREATE TABLE recurrence_exceptions (

@@ -177,7 +177,7 @@ export class MeetingRepository {
            (m.start_time >= $2 AND m.start_time < $3)
            OR (m.end_time > $2 AND m.end_time <= $3)
            OR (m.start_time <= $2 AND m.end_time <= $3)
-           OR (r.until is NULL OR r.until >$2)
+           OR (r.until_date is NULL OR r.until_date >$2)
            OR r.id IS NOT NULL
          )
          ORDER BY m.start_time ASC`,

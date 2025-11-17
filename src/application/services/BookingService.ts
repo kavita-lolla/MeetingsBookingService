@@ -94,7 +94,14 @@ export class BookingService {
 
         // Publish to Kafka for cache update
         try {
-          await this.kafkaProducer.publishBookingEvent(meeting);
+          const result = await Promise.race([
+            this.kafkaProducer.publishBookingEvent(meeting),
+            this.timeout(3000) // auto-timeout after 3s
+          ]);
+        
+          if (result === 'timeout') {
+            logger.error('Kafka publish timed out. Skipping cache update.');
+          }
         } catch (error) {
           logger.error('Failed to publish booking event to Kafka', error);
           // Don't fail the booking if Kafka publish fails
@@ -112,6 +119,8 @@ export class BookingService {
     recurrenceRule?: RecurrenceRule,
     exceptions?: RecurrenceException[]
   ): Promise<BookingConflict> {
+
+    console.log("detecting conflict-" +startTime + " " + endTime);
 
     if (!recurrenceRule) {
       return await this.detectConflictingMeetings(resourceId, startTime, endTime);
@@ -300,5 +309,11 @@ export class BookingService {
     // }
 
     return availableSlots;
+  }
+
+  private timeout(ms: number) {
+    return new Promise((resolve) => {
+      setTimeout(() => resolve('timeout'), ms);
+    });
   }
 }

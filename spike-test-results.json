@@ -1,0 +1,214 @@
+{
+    "setup_data": {
+        "startTime": "2025-11-15T17:52:57.655Z",
+        "testType": "spike"
+    },
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {
+            "setup": {
+                "name": "setup",
+                "path": "::setup",
+                "id": "5c0f8025f7e0b6654089e5b00e950f1a",
+                "groups": {},
+                "checks": {}
+            },
+            "teardown": {
+                "checks": {},
+                "name": "teardown",
+                "path": "::teardown",
+                "id": "a8a9942382e8ffe2e56ef29e664b8229",
+                "groups": {}
+            }
+        },
+        "checks": {
+            "request completed": {
+                "name": "request completed",
+                "path": "::request completed",
+                "id": "ce8b884120ad79ad7f23b8a7e2dbc899",
+                "passes": 331,
+                "fails": 421
+            },
+            "valid response status": {
+                "name": "valid response status",
+                "path": "::valid response status",
+                "id": "a5be20280f49ecfb438bf6354f1b4145",
+                "passes": 331,
+                "fails": 421
+            },
+            "availability query completed": {
+                "passes": 214,
+                "fails": 0,
+                "name": "availability query completed",
+                "path": "::availability query completed",
+                "id": "9c0dcfa8897b57b5eb666afdac2cb428"
+            },
+            "availability valid status": {
+                "name": "availability valid status",
+                "path": "::availability valid status",
+                "id": "fe3149fc39a3fb615bacbca5f923c42b",
+                "passes": 214,
+                "fails": 0
+            }
+        }
+    },
+    "metrics": {
+        "http_req_tls_handshaking": {
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0
+        },
+        "vus": {
+            "max": 679,
+            "value": 679,
+            "min": 5
+        },
+        "http_req_blocked": {
+            "p(95)": 0.3776999999999999,
+            "avg": 0.15269286452947156,
+            "min": 0.002,
+            "med": 0.196,
+            "max": 1.4,
+            "p(90)": 0.339
+        },
+        "http_req_receiving": {
+            "avg": 0.028612202688727977,
+            "min": 0,
+            "med": 0.029,
+            "max": 1.339,
+            "p(90)": 0.062399999999999976,
+            "p(95)": 0.072
+        },
+        "booking_duration": {
+            "p(90)": 10001,
+            "p(95)": 10001,
+            "avg": 6810.996010638298,
+            "min": 19,
+            "med": 10000,
+            "max": 10002
+        },
+        "vus_max": {
+            "value": 1000,
+            "min": 1000,
+            "max": 1000
+        },
+        "http_req_duration": {
+            "min": 4.439,
+            "med": 7288.676,
+            "max": 10001.418,
+            "p(90)": 10000.5168,
+            "p(95)": 10000.6561,
+            "avg": 5313.573383660812,
+            "thresholds": {
+                "p(95)<2000": true,
+                "p(99)<5000": true
+            }
+        },
+        "iteration_duration": {
+            "p(90)": 10077.3878936,
+            "p(95)": 10101.8402396,
+            "avg": 6844.126538295854,
+            "min": 0.14817,
+            "med": 10060.86117,
+            "max": 10458.756007
+        },
+        "http_req_failed": {
+            "passes": 666,
+            "fails": 301,
+            "thresholds": {
+                "rate<0.2": true
+            },
+            "value": 0.688728024819028
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 80.77631893687706,
+            "min": 4.439,
+            "med": 34.991,
+            "max": 398.782,
+            "p(90)": 334.1,
+            "p(95)": 373.668
+        },
+        "http_req_sending": {
+            "med": 0.034,
+            "max": 0.139,
+            "p(90)": 0.068,
+            "p(95)": 0.078,
+            "avg": 0.03766184074457092,
+            "min": 0.008
+        },
+        "data_sent": {
+            "count": 507257,
+            "rate": 16785.373217499036
+        },
+        "failed_bookings": {
+            "rate": 22.03825390848102,
+            "count": 666
+        },
+        "conflict_errors": {
+            "count": 125,
+            "rate": 4.136308916756948
+        },
+        "successful_bookings": {
+            "count": 86,
+            "rate": 2.845780534728781
+        },
+        "availability_duration": {
+            "med": 22,
+            "max": 399,
+            "p(90)": 360.70000000000005,
+            "p(95)": 383.7,
+            "avg": 77.77570093457943,
+            "min": 7
+        },
+        "system_errors": {
+            "count": 541,
+            "rate": 17.901944991724072
+        },
+        "http_reqs": {
+            "count": 967,
+            "rate": 31.998485780031753
+        },
+        "http_req_connecting": {
+            "p(95)": 0.284,
+            "avg": 0.1143836608066185,
+            "min": 0,
+            "med": 0.149,
+            "max": 1.319,
+            "p(90)": 0.25739999999999996
+        },
+        "iterations": {
+            "count": 745,
+            "rate": 24.652401143871415
+        },
+        "data_received": {
+            "count": 603120,
+            "rate": 19957.525070995605
+        },
+        "error_rate": {
+            "passes": 541,
+            "fails": 0,
+            "thresholds": {
+                "rate<0.15": true
+            },
+            "value": 1
+        },
+        "http_req_waiting": {
+            "avg": 5313.507109617375,
+            "min": 4.314,
+            "med": 7288.528,
+            "max": 10001.4,
+            "p(90)": 10000.483,
+            "p(95)": 10000.6358
+        },
+        "checks": {
+            "fails": 842,
+            "passes": 1090,
+            "value": 0.5641821946169773
+        }
+    }
+}
