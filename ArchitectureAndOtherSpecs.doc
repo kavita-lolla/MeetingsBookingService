@@ -176,13 +176,8 @@ Improve code/folder structuring.
 Refactor for better reusability of code.
 Use of caching for available slots within 30 days - enhances performance of both apis.
 Logging can be improved.
-To
- Person Person Person
-Cc
- Person
-Bcc
- Person
-Subject
+There seems to be an environment problem which is converting all the objects into stream which is why the application fails on creating date objects.
+Load test shows 8% error rate on 1000 requests per hour and even larger on spike test. Can work on improving the same.
 
 
 
