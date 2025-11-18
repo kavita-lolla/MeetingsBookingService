@@ -19,6 +19,8 @@ For recurring meetings → find conflicts by looking at all occurrences within 3
 When checking availability for a resource:
 If the requested date range is within 30 days → use cached meetings from Redis.
 Otherwise → use all meeting occurrences (single + recurring) from the database for the requested date range.
+
+
 Trade-offs -
 SQL v/ Non-SQL -
 SQL gives fast query results with proper indexing
@@ -28,12 +30,11 @@ Storage of pre-computed meetings - DB v/s Redis
 Faster retrieval from caching
 Handling eviction or expiry of meetings daily from caching is simpler and cheaper than DB
 
-
-
 Caching key - Per Resource v/s Per Resource Per day 
 Per resource per day - faster for conflict check / fetching for availability check
 Per resource per day has better eviction / TTL handling
 Per resource per day is more scalable. Works better with large data
+
 
 Cache Handling -
 When the server starts, it rebuilds the Redis cache by loading all meetings scheduled for the next 30 days.
@@ -45,6 +46,7 @@ When a new meeting is created through the POST API, the service writes it to the
 The system must tolerate Redis data loss.
  If Redis is restarted or loses memory, the server repopulates the cache on startup.
  If Redis is unavailable at any time, the system should fall back to querying the database directly.
+
 
 Avoid double booking -
 Each request received should possess an idempotency key to avoid double booking of the same resource.
@@ -166,7 +168,6 @@ startTime
 reason
 
 
-
 Scope of Improvement/Extensions - 
 Excluding days (like weekends, alternate fridays etc)
 Treat skip (not adding) and cancel differently (add but mark as cancelled) - add a status column to meetings table.
@@ -177,14 +178,4 @@ Refactor for better reusability of code.
 Use of caching for available slots within 30 days - enhances performance of both apis.
 Logging can be improved.
 There seems to be an environment problem which is converting all the objects into stream which is why the application fails on creating date objects.
-Load test shows 8% error rate on 1000 requests per hour and even larger on spike test. Can work on improving the same.
-
-
-
-
-
-
-
-
-Application was working before a docker update in my local machine. It’s unable to create Date objects properly and hence failing. All the testcases were passed.
 Load test shows 8% error rate on 1000 requests per hour and even larger on spike test. Can work on improving the same.
